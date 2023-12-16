@@ -29,8 +29,8 @@
 
 char* ipv4_protocol(unsigned int code);
 
-void  process_ipv4();
-void  process_ipv6();
+void  process_ipv4(unsigned char data[], uint8_t* source, uint8_t* dest);
+void  process_ipv6(unsigned char data[], uint8_t* source, uint8_t* dest);
 
 int main() {
     char     buffer[2048];
@@ -74,30 +74,38 @@ int main() {
         eth_type |= (eth_t[1]);
 
         switch (eth_type) {
-        case 0x0800: process_ipv4();
+        case 0x0800: process_ipv4(data, source, dest); break;
+        case 0x86dd: process_ipv6(data, source, dest); break;
         default:     NETWARN("potential unimplemented protocol (saw unfamiliar EtherType)\n");
         }
-
-        // TODO: make this definition actually valid
-        void process_ipv4() {
-            char* major = "ipv4";
-
-            printf("%s (%s) packet:\n", major, ipv4_protocol(data[9]));
-            printf("%.2x%.2x\n", eth_t[0], eth_t[1]);
-
-            printf("%.2x:%.2x:%.2x:%.2x:%.2x:%.2x -> ", source[0], source[1], source[2], source[3], source[4], source[5]);
-            printf("%.2x:%.2x:%.2x:%.2x:%.2x:%.2x\n",   dest[0],   dest[1],   dest[2],   dest[3],   dest[4],   dest[5]);
-            
-            printf("%d.%d.%d.%d:%d -> ", data[12], data[13], data[14], data[15], (data[20]<<8) + data[21]);
-            printf("%d.%d.%d.%d:%d\n",   data[16], data[17], data[18], data[19], (data[22]<<8) + data[23]);
-        }
-
 
         free(source);
         free(dest);
     }
 
     return 0;
+}
+
+#define PRINT_PROTOCOL(major, protofunc, OFF)                   \
+    printf("%-5s %5s packet: ", major, protofunc(data[OFF]));   \
+    printf("%.2x:%.2x:%.2x:%.2x:%.2x:%.2x > ", source[0], source[1], source[2], source[3], source[4], source[5]); \
+    printf("%.2x:%.2x:%.2x:%.2x:%.2x:%.2x  ",  dest[0],   dest[1],   dest[2],   dest[3],   dest[4],   dest[5]);
+     
+
+void process_ipv4(unsigned char data[], uint8_t* source, uint8_t* dest) {
+    PRINT_PROTOCOL("ipv4", ipv4_protocol, 9);
+    printf("%d.%d.%d.%d:%d > ", data[12], data[13], data[14], data[15], (data[20] << 8) + data[21]);
+    printf("%d.%d.%d.%d:%d\n",  data[16], data[17], data[18], data[19], (data[22] << 8) + data[23]);
+}
+
+void process_ipv6(unsigned char data[], uint8_t* source, uint8_t* dest) {
+    // need to test this on a machine with ipv6
+    // 64 -> +256 are source and dest addresses
+    PRINT_PROTOCOL("ipv6", ipv4_protocol, 6);
+    printf("[%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x]:%02x > ",
+            data[8],  data[9],  data[10], data[11], data[12], data[13], data[14], data[15], data[16], 0);
+    printf("[%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x]:%02x\n",
+            data[24], data[25], data[26], data[27], data[28], data[29], data[30], data[31], data[32], 0);
 }
 
 char* ipv4_protocol(unsigned int code) {
@@ -107,6 +115,7 @@ char* ipv4_protocol(unsigned int code) {
         case  0x06: return "tcp";
         case  0x11: return "udp";
         case  0x29: return "ipv6"; // what?
-        default:    NETWARN("potential unimplemented ipv4 protocol (saw unfamiliar protocol number in ipv4 header)\n"); return "unknown";
+        default:    NETWARN("potential unimplemented ipv4 protocol (saw unfamiliar protocol number in ipv4 header)\n");
+                    return "unknown";
     }
 }
